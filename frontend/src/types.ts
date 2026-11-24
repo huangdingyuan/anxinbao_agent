@@ -1,0 +1,155 @@
+export type InsuranceCategory = 'medical' | 'critical_illness' | 'life' | 'accident';
+
+export interface Product {
+  id: number;
+  name: string;
+  clause_name: string;
+  category: InsuranceCategory;
+  insurer: string;
+  image_url: string | null;
+  description: string;
+  min_premium: number;
+  max_premium: number | null;
+  target_group: string;
+  highlights: string[];
+  status: string;
+}
+
+export interface UserSummary {
+  id: number;
+  username: string;
+  email: string;
+  displayName: string | null;
+}
+
+export interface AuthSession {
+  user: UserSummary;
+}
+
+export interface UserProfile {
+  id: number;
+  username: string;
+  email: string;
+  phone: string | null;
+  display_name: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  additionalInfo?: AdditionalInfo[];
+  additional_info?: unknown;
+}
+
+export interface ChatHistory {
+  thread_id: string;
+  messages: ChatMessage[];
+  interrupt: PlanInterrupt | null;
+  additional_info?: unknown;
+}
+
+export interface PlanInterrupt {
+  plan: unknown;
+  confirm_info: string;
+  action: Array<'approve' | 'reject'>;
+}
+
+export interface ClauseSource {
+  source_id: string;
+  clause_name?: string | null;
+  document_name?: string | null;
+  section_path?: string | string[] | null;
+  clause_no?: string | null;
+  content?: string | null;
+  score?: number | null;
+  [key: string]: unknown;
+}
+
+export interface AdditionalProduct {
+  id?: number | string;
+  plan_id?: string | null;
+  product_id?: number | string;
+  name?: string;
+  product_name?: string;
+  category?: string;
+  insurer?: string | null;
+  image_url?: string | null;
+  description?: string | null;
+  min_premium?: number | string | null;
+  annual_premium_budget?: number | string | null;
+  target_group?: string | null;
+  highlights?: string[];
+  recommendation_reason?: string | null;
+  reason?: string | null;
+  status?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AdditionalPolicy {
+  id?: string;
+  policy_number?: string | null;
+  application_no?: string | null;
+  status?: string | null;
+  effective_at?: string | null;
+  expires_at?: string | null;
+  days_to_expire?: number | null;
+  expire_soon?: boolean;
+  holder_name?: string | null;
+  insured_name?: string | null;
+  insured_id_no_masked?: string | null;
+  insured_phone?: string | null;
+  coverage_amount?: number | string | null;
+  premium_amount?: number | string | null;
+  payment_frequency?: string | null;
+  product_id?: number | string;
+  product?: AdditionalProduct;
+  coverage_snapshot?: Record<string, unknown> | null;
+  policy_snapshot?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
+export interface PolicyBenefit {
+  section: string;
+  heading: string | null;
+  page_no: number;
+  content: string;
+}
+
+export interface PolicyBenefits {
+  policy_id: string;
+  product_name: string | null;
+  document_name: string | null;
+  benefits: PolicyBenefit[];
+}
+
+export type AdditionalInfo =
+  | { type: 'clause_sources'; sources: ClauseSource[] }
+  | { type: 'products'; title: string; products: AdditionalProduct[] }
+  | { type: 'policies'; title: string; policies: AdditionalPolicy[] };
+
+export interface ClaimPolicySummary {
+  id: string;
+  policy_number: string;
+  product_name: string | null;
+}
+
+export interface ClaimRecord {
+  id: string;
+  claim_number: string | null;
+  status: 'submitted' | 'reviewing' | 'approved' | 'rejected' | 'paid' | string;
+  claim_type: string;
+  amount: string | null;
+  description: string | null;
+  policy: ClaimPolicySummary;
+  submitted_at: string;
+  updated_at: string;
+}

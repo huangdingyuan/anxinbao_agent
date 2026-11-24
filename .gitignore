@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.idea/
+.vscode/
+
+# 环境与密钥
+.env
+*.env.local
+
+# 构建产物
+frontend/tsconfig.tsbuildinfo
+
+# 临时文件
+*.log
+lark-auth-qrcode.png
