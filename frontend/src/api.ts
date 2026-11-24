@@ -40,7 +40,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function authorizedBusinessRequest<T>(
   path: string,
-  userId: number,
+  token: string,
   init?: RequestInit,
 ): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -48,7 +48,7 @@ async function authorizedBusinessRequest<T>(
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      'x-user-id': String(userId),
+      Authorization: `Bearer ${token}`,
       ...init?.headers,
     },
   });
@@ -64,14 +64,14 @@ async function authorizedBusinessRequest<T>(
 
 async function agentRequest<T>(
   path: string,
-  userId: number,
+  token: string,
   init?: RequestInit,
 ): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      'x-user-id': String(userId),
+      Authorization: `Bearer ${token}`,
       ...init?.headers,
     },
   });
@@ -98,21 +98,21 @@ export function listProducts(
 }
 
 export function markPlanItemInsured(
-  userId: number,
+  token: string,
   planId: string,
   itemId: string,
 ): Promise<unknown> {
   return authorizedBusinessRequest<unknown>(
     `/insurance-plans/${encodeURIComponent(planId)}/items/${encodeURIComponent(itemId)}/insured`,
-    userId,
+    token,
     { method: 'PATCH' },
   );
 }
 
-export function getInsurancePlan(userId: number, planId: string): Promise<unknown> {
+export function getInsurancePlan(token: string, planId: string): Promise<unknown> {
   return authorizedBusinessRequest<unknown>(
     `/insurance-plans/${encodeURIComponent(planId)}`,
-    userId,
+    token,
   );
 }
 
@@ -123,16 +123,22 @@ export interface ClaimCreateInput {
   description?: string;
 }
 
-export function listPolicies(userId: number): Promise<AdditionalPolicy[]> {
-  return authorizedBusinessRequest<AdditionalPolicy[]>('/policies', userId);
+export function listPolicies(token: string): Promise<AdditionalPolicy[]> {
+  return authorizedBusinessRequest<AdditionalPolicy[]>('/policies', token);
 }
 
-export function getUserProfile(userId: number): Promise<UserProfile> {
-  return authorizedBusinessRequest<UserProfile>('/users/me', userId);
+export function getUserProfile(token: string): Promise<UserProfile> {
+  return authorizedBusinessRequest<UserProfile>('/users/me', token);
 }
 
-export function login(username: string, password: string): Promise<UserProfile> {
-  return request<UserProfile>('/auth/login', {
+export interface LoginResult {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+}
+
+export function login(username: string, password: string): Promise<LoginResult> {
+  return request<LoginResult>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
@@ -145,42 +151,42 @@ export interface UserProfileUpdateInput {
 }
 
 export function updateUserProfile(
-  userId: number,
+  token: string,
   input: UserProfileUpdateInput,
 ): Promise<UserProfile> {
-  return authorizedBusinessRequest<UserProfile>('/users/me', userId, {
+  return authorizedBusinessRequest<UserProfile>('/users/me', token, {
     method: 'PATCH',
     body: JSON.stringify(input),
   });
 }
 
-export function getPolicyBenefits(userId: number, policyId: string): Promise<PolicyBenefits> {
+export function getPolicyBenefits(token: string, policyId: string): Promise<PolicyBenefits> {
   return authorizedBusinessRequest<PolicyBenefits>(
     `/policies/${encodeURIComponent(policyId)}/benefits`,
-    userId,
+    token,
   );
 }
 
-export function listClaims(userId: number, policyId?: string): Promise<ClaimRecord[]> {
+export function listClaims(token: string, policyId?: string): Promise<ClaimRecord[]> {
   const query = policyId ? `?policy_id=${encodeURIComponent(policyId)}` : '';
-  return authorizedBusinessRequest<ClaimRecord[]>(`/claims${query}`, userId);
+  return authorizedBusinessRequest<ClaimRecord[]>(`/claims${query}`, token);
 }
 
-export function createClaim(userId: number, input: ClaimCreateInput): Promise<ClaimRecord> {
-  return authorizedBusinessRequest<ClaimRecord>('/claims', userId, {
+export function createClaim(token: string, input: ClaimCreateInput): Promise<ClaimRecord> {
+  return authorizedBusinessRequest<ClaimRecord>('/claims', token, {
     method: 'POST',
     body: JSON.stringify(input),
   });
 }
 
 export function advanceClaimStatus(
-  userId: number,
+  token: string,
   claimId: string,
   status: string,
 ): Promise<ClaimRecord> {
   return authorizedBusinessRequest<ClaimRecord>(
     `/claims/${encodeURIComponent(claimId)}/status`,
-    userId,
+    token,
     {
       method: 'PATCH',
       body: JSON.stringify({ status }),
@@ -188,40 +194,40 @@ export function advanceClaimStatus(
   );
 }
 
-export function listChatThreads(userId: number): Promise<ChatThread[]> {
-  return agentRequest<ChatThread[]>('/chat-threads', userId);
+export function listChatThreads(token: string): Promise<ChatThread[]> {
+  return agentRequest<ChatThread[]>('/chat-threads', token);
 }
 
-export function createChatThread(userId: number, title = '保险咨询'): Promise<ChatThread> {
-  return agentRequest<ChatThread>('/chat-threads', userId, {
+export function createChatThread(token: string, title = '保险咨询'): Promise<ChatThread> {
+  return agentRequest<ChatThread>('/chat-threads', token, {
     method: 'POST',
     body: JSON.stringify({ title }),
   });
 }
 
-export function getChatHistory(userId: number, threadId: string): Promise<ChatHistory> {
-  return agentRequest<ChatHistory>(`/chat-threads/${threadId}/messages`, userId);
+export function getChatHistory(token: string, threadId: string): Promise<ChatHistory> {
+  return agentRequest<ChatHistory>(`/chat-threads/${threadId}/messages`, token);
 }
 
 export function renameChatThread(
-  userId: number,
+  token: string,
   threadId: string,
   title: string,
 ): Promise<ChatThread> {
-  return agentRequest<ChatThread>(`/chat-threads/${threadId}`, userId, {
+  return agentRequest<ChatThread>(`/chat-threads/${threadId}`, token, {
     method: 'PATCH',
     body: JSON.stringify({ title }),
   });
 }
 
-export async function deleteChatThread(userId: number, threadId: string): Promise<void> {
-  await agentRequest<void>(`/chat-threads/${threadId}`, userId, {
+export async function deleteChatThread(token: string, threadId: string): Promise<void> {
+  await agentRequest<void>(`/chat-threads/${threadId}`, token, {
     method: 'DELETE',
   });
 }
 
 export async function streamChat(
-  userId: number,
+  token: string,
   threadId: string,
   input: { message?: string; decision?: Record<string, unknown> },
   handlers: {
@@ -234,7 +240,7 @@ export async function streamChat(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-user-id': String(userId),
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ thread_id: threadId, ...input }),
   });

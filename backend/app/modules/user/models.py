@@ -1,6 +1,6 @@
 """用户模块
 
-复用数据库已有 users 表，提供个人资料查看/编辑能力（无真实认证，按 x-user-id 定位用户）。
+复用数据库已有 users 表，提供个人资料查看/编辑能力（JWT 认证，按令牌中的用户 ID 定位用户）。
 """
 
 from sqlalchemy import BigInteger, String

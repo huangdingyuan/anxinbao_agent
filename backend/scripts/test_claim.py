@@ -6,14 +6,32 @@ import urllib.error
 
 sys.stdout.reconfigure(encoding="utf-8")
 
+from app.common.utils import create_access_token
+
 BASE = "http://127.0.0.1:8001/api/v1"
 
 
+def login_token(username: str = "demo", password: str = "123456") -> str:
+    """登录获取 JWT 访问令牌"""
+    req = urllib.request.Request(
+        f"{BASE}/auth/login",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps({"username": username, "password": password}).encode(),
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read())["access_token"]
+
+
+TOKEN = login_token()
+
+
 def request(method: str, path: str, user_id: int = 1, body: dict | None = None):
+    token = TOKEN if user_id == 1 else create_access_token(user_id)
     req = urllib.request.Request(
         f"{BASE}{path}",
         method=method,
-        headers={"Content-Type": "application/json", "x-user-id": str(user_id)},
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
         data=json.dumps(body).encode() if body else None,
     )
     try:

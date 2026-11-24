@@ -64,7 +64,7 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
   const [selectedSource, setSelectedSource] = useState<SelectedSource | null>(null);
   const [planItemStatuses, setPlanItemStatuses] = useState<Record<string, ProductPlanStatus>>({});
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const userId = session.user.id;
+  const token = session.token;
   const planIdsKey = useMemo(
     () => collectPlanIds(messages, pendingInterrupt).join('|'),
     [messages, pendingInterrupt],
@@ -74,12 +74,12 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
     setLoadingMessages(true);
     setError(null);
     try {
-      const history = await getChatHistory(userId, threadId);
+      const history = await getChatHistory(token, threadId);
       setMessages(normalizeHistoryMessages(history.messages));
       setPendingInterrupt(history.interrupt);
       // 附上名下保单信息，保单卡片上提供申请理赔入口
       try {
-        const policies = await listPolicies(userId);
+        const policies = await listPolicies(token);
         if (policies.length > 0) {
           setMessages((current) =>
             attachInfoToLastAssistantMessage(current, normalizeAdditionalInfo(policies)),
@@ -97,7 +97,7 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
     } finally {
       setLoadingMessages(false);
     }
-  }, [onSessionExpired, userId]);
+  }, [onSessionExpired, token]);
 
   const openThread = useCallback(async (threadId: string) => {
     setActiveThreadId(threadId);
@@ -105,13 +105,13 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
   }, [loadMessages]);
 
   const createThread = useCallback(async () => {
-    const thread = await createChatThread(userId);
+    const thread = await createChatThread(token);
     setThreads((current) => [thread, ...current]);
     setActiveThreadId(thread.id);
     setMessages([]);
     setPendingInterrupt(null);
     return thread;
-  }, [userId]);
+  }, [token]);
 
   async function startNewThread() {
     setError(null);
@@ -132,7 +132,7 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
     if (!title) return;
     setError(null);
     try {
-      const updated = await renameChatThread(userId, renamingThread.id, title);
+      const updated = await renameChatThread(token, renamingThread.id, title);
       setThreads((current) =>
         current.map((thread) => (thread.id === updated.id ? updated : thread)),
       );
@@ -150,7 +150,7 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
   async function deleteThread(threadId: string) {
     setError(null);
     try {
-      await deleteChatThread(userId, threadId);
+      await deleteChatThread(token, threadId);
       const nextThreads = threads.filter((thread) => thread.id !== threadId);
       setThreads(nextThreads);
       if (activeThreadId === threadId) {
@@ -175,10 +175,10 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
       setLoadingThreads(true);
       setError(null);
       try {
-        const loaded = await listChatThreads(userId);
+        const loaded = await listChatThreads(token);
         if (ignore) return;
         if (loaded.length === 0) {
-          const thread = await createChatThread(userId);
+          const thread = await createChatThread(token);
           if (ignore) return;
           setThreads([thread]);
           setActiveThreadId(thread.id);
@@ -205,7 +205,7 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
     return () => {
       ignore = true;
     };
-  }, [loadMessages, onSessionExpired, userId]);
+  }, [loadMessages, onSessionExpired, token]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -221,7 +221,7 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
     let ignore = false;
     async function refreshPlanItemStatuses() {
       try {
-        const plans = await Promise.all(planIds.map((planId) => getInsurancePlan(userId, planId)));
+        const plans = await Promise.all(planIds.map((planId) => getInsurancePlan(token, planId)));
         if (!ignore) setPlanItemStatuses(mergePlanItemStatuses(plans));
       } catch (reason) {
         if (ignore) return;
@@ -235,7 +235,7 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
     return () => {
       ignore = true;
     };
-  }, [onSessionExpired, planIdsKey, userId]);
+  }, [onSessionExpired, planIdsKey, token]);
 
   async function sendMessage() {
     const content = input.trim();
@@ -251,7 +251,7 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
         { role: 'user', content },
         { role: 'assistant', content: '' },
       ]);
-      await streamChat(userId, threadId, { message: content }, {
+      await streamChat(token, threadId, { message: content }, {
         onMessage: appendAssistantChunk,
         onAdditionalInfo: appendAdditionalInfo,
         onInterrupt: (interrupt) => {
@@ -296,7 +296,7 @@ export function AdvisorPage({ session, onBack, onSessionExpired, onApplyProduct 
       { role: 'assistant', content: '' },
     ]);
     try {
-      await streamChat(userId, activeThreadId, { decision }, {
+      await streamChat(token, activeThreadId, { decision }, {
         onMessage: appendAssistantChunk,
         onAdditionalInfo: appendAdditionalInfo,
         onInterrupt: (interrupt) => {

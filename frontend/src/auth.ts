@@ -2,15 +2,6 @@ import type { AuthSession } from './types';
 
 const STORAGE_KEY = 'insurance-mall-auth-v2';
 
-export const DEFAULT_SESSION: AuthSession = {
-  user: {
-    id: 1,
-    username: 'demo',
-    email: 'demo@example.com',
-    displayName: '演示用户',
-  },
-};
-
 export function readSession(): AuthSession | null {
   try {
     const value = window.localStorage.getItem(STORAGE_KEY);

@@ -8,7 +8,6 @@ import urllib.request
 sys.stdout.reconfigure(encoding="utf-8")
 
 BASE = "http://127.0.0.1:8001/api/v1"
-USER = {"x-user-id": "1"}
 
 
 def call(method: str, path: str, body: dict | None = None, headers: dict | None = None):

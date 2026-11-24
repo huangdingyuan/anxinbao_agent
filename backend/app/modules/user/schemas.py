@@ -40,3 +40,11 @@ class LoginPayload(BaseModel):
 
     username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=1, max_length=120)
+
+
+class LoginResult(BaseModel):
+    """登录成功响应：JWT 访问令牌 + 用户资料"""
+
+    access_token: str
+    token_type: str = "bearer"
+    user: UserProfilePayload

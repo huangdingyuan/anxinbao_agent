@@ -77,7 +77,7 @@ export function ClaimFormModal({
 }) {
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
-  const userId = session.user.id;
+  const token = session.token;
 
   useEffect(() => {
     if (policy) form.resetFields();
@@ -87,7 +87,7 @@ export function ClaimFormModal({
     if (!policy?.id) return;
     setSubmitting(true);
     try {
-      const claim = await createClaim(userId, {
+      const claim = await createClaim(token, {
         policy_id: policy.id,
         claim_type: values.claim_type,
         amount: values.amount != null ? String(values.amount) : undefined,
@@ -167,19 +167,19 @@ export function ClaimsDrawer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [advancingId, setAdvancingId] = useState<string | null>(null);
-  const userId = session.user.id;
+  const token = session.token;
 
   const loadClaims = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setClaims(await listClaims(userId));
+      setClaims(await listClaims(token));
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : '理赔记录加载失败，请稍后重试');
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [token]);
 
   useEffect(() => {
     if (open) loadClaims();
@@ -188,7 +188,7 @@ export function ClaimsDrawer({
   async function advance(claim: ClaimRecord, status: string) {
     setAdvancingId(claim.id);
     try {
-      const updated = await advanceClaimStatus(userId, claim.id, status);
+      const updated = await advanceClaimStatus(token, claim.id, status);
       setClaims((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );

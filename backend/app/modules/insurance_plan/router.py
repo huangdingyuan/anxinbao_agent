@@ -1,11 +1,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.common.deps import get_session
+from app.common.deps import get_current_user_id, get_session
 from app.modules.insurance_plan.schemas import PlanPayload
 from app.modules.policy.repository import PolicyRepository
 from app.modules.products.models import Product
@@ -29,7 +29,7 @@ async def _get_owned_plan(repository: InsurancePlanRepository, plan_id: UUID, us
 @router.get("/{plan_id}", response_model=PlanPayload)
 async def get_insurance_plan(
         plan_id: UUID,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         repository: InsurancePlanRepository = Depends(get_repository),
 ):
     """查询保障方案详情（含各产品项的投保状态）"""
@@ -41,7 +41,7 @@ async def get_insurance_plan(
 async def mark_plan_item_insured(
         plan_id: UUID,
         item_id: UUID,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         repository: InsurancePlanRepository = Depends(get_repository),
         session: AsyncSession = Depends(get_session),
 ):

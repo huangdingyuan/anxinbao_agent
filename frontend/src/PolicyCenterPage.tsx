@@ -75,19 +75,19 @@ export function PolicyCenterPage({ session, onBack, onLogout, onAccount }: Polic
   const [claimPolicy, setClaimPolicy] = useState<AdditionalPolicy | null>(null);
   const [claimsOpen, setClaimsOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const userId = session.user.id;
+  const token = session.token;
 
   const loadPolicies = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setPolicies(await listPolicies(userId));
+      setPolicies(await listPolicies(token));
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : '保单加载失败，请稍后重试');
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [token]);
 
   useEffect(() => {
     loadPolicies();
@@ -99,7 +99,7 @@ export function PolicyCenterPage({ session, onBack, onLogout, onAccount }: Polic
     setBenefits(null);
     setBenefitsLoading(true);
     try {
-      setBenefits(await getPolicyBenefits(userId, policy.id));
+      setBenefits(await getPolicyBenefits(token, policy.id));
     } catch (reason) {
       message.error(reason instanceof ApiError ? reason.message : '权益解析失败，请稍后重试');
       setBenefitsPolicy(null);

@@ -1,10 +1,10 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.deps import get_session
+from app.common.deps import get_current_user_id, get_session
 from .schemas import ClaimCreateRequest, ClaimPayload, ClaimStatusUpdateRequest
 from .service import ClaimService, build_claim_payload
 
@@ -17,7 +17,7 @@ def get_service(session: AsyncSession = Depends(get_session)) -> ClaimService:
 
 @router.get("", response_model=list[ClaimPayload])
 async def list_claims(
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         policy_id: UUID | None = Query(default=None),
         service: ClaimService = Depends(get_service),
 ):
@@ -27,7 +27,7 @@ async def list_claims(
 
 @router.post("", response_model=ClaimPayload)
 async def create_claim(
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         request: ClaimCreateRequest,
         service: ClaimService = Depends(get_service),
         session: AsyncSession = Depends(get_session),
@@ -47,7 +47,7 @@ async def create_claim(
 @router.get("/{claim_id}", response_model=ClaimPayload)
 async def get_claim(
         claim_id: UUID,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         service: ClaimService = Depends(get_service),
 ):
     """查询理赔申请详情"""
@@ -57,7 +57,7 @@ async def get_claim(
 @router.patch("/{claim_id}/status", response_model=ClaimPayload)
 async def update_claim_status(
         claim_id: UUID,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         request: ClaimStatusUpdateRequest,
         service: ClaimService = Depends(get_service),
         session: AsyncSession = Depends(get_session),

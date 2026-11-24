@@ -104,7 +104,7 @@ npm run dev            # http://localhost:5173，/api 自动代理到后端 8001
 | 理赔 | `GET/POST /api/v1/claims` · `GET /api/v1/claims/{id}` · `PATCH /api/v1/claims/{id}/status` |
 | 知识库 | `GET /api/v1/knowledge/documents[/{id}/chunks]` · `GET /search` · `POST /ingest` |
 
-> 除登录外，接口需携带 `x-user-id` 请求头（登录响应中返回的用户 ID）。
+> 除登录外，接口需携带 `Authorization: Bearer <access_token>` 请求头（登录响应中返回的 JWT 访问令牌）。
 
 ## 部署
 

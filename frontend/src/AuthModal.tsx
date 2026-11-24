@@ -26,13 +26,14 @@ export function AuthModal({
   async function submit(values: AuthFormValues) {
     setLoading(true);
     try {
-      const profile = await login(values.username, values.password);
+      const result = await login(values.username, values.password);
       onSuccess({
+        token: result.access_token,
         user: {
-          id: profile.id,
-          username: profile.username,
-          email: profile.email,
-          displayName: profile.display_name,
+          id: result.user.id,
+          username: result.user.username,
+          email: result.user.email,
+          displayName: result.user.display_name,
         },
       });
     } catch (reason) {

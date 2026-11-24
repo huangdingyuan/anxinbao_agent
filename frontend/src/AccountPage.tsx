@@ -45,13 +45,13 @@ export function AccountPage({ session, onBack }: AccountPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<ProfileFormValues>();
-  const userId = session.user.id;
+  const token = session.token;
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const next = await getUserProfile(userId);
+      const next = await getUserProfile(token);
       setProfile(next);
       form.setFieldsValue({
         display_name: next.display_name ?? '',
@@ -63,7 +63,7 @@ export function AccountPage({ session, onBack }: AccountPageProps) {
     } finally {
       setLoading(false);
     }
-  }, [form, userId]);
+  }, [form, token]);
 
   useEffect(() => {
     loadProfile();
@@ -72,7 +72,7 @@ export function AccountPage({ session, onBack }: AccountPageProps) {
   async function save(values: ProfileFormValues) {
     setSaving(true);
     try {
-      const updated = await updateUserProfile(userId, {
+      const updated = await updateUserProfile(token, {
         display_name: values.display_name || undefined,
         email: values.email || undefined,
         phone: values.phone || undefined,

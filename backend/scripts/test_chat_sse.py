@@ -9,9 +9,20 @@ import json
 
 import httpx
 
+from app.common.utils import create_access_token
+
 BASE = "http://127.0.0.1:8001/api/v1"
-# 方案表外键关联 users，需使用真实存在的用户
-HEADERS = {"x-user-id": "1"}
+
+
+def login_token(username: str = "demo", password: str = "123456") -> str:
+    """登录获取 JWT 访问令牌（方案表外键关联 users，需使用真实存在的用户）"""
+    with httpx.Client(timeout=30) as client:
+        r = client.post(f"{BASE}/auth/login", json={"username": username, "password": password})
+        r.raise_for_status()
+        return r.json()["access_token"]
+
+
+HEADERS = {"Authorization": f"Bearer {login_token()}"}
 
 
 def parse_sse_events(lines_iter):
@@ -139,8 +150,9 @@ def main():
         print(f"[9] 重复决策: {r.status_code} {r.json()}")
         assert r.status_code == 400
 
-        # 10. 越权查询方案 -> 404
-        r = client.get(f"{BASE}/insurance-plans/{plan['id']}", headers={"x-user-id": "9999"})
+        # 10. 越权查询方案 -> 404（签一个不存在用户的合法 token）
+        r = client.get(f"{BASE}/insurance-plans/{plan['id']}",
+                       headers={"Authorization": f"Bearer {create_access_token(9999)}"})
         assert r.status_code == 404
 
         print("\n全部通过 ✅")

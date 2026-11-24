@@ -1,12 +1,12 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BizError, NotFoundError
-from app.common.deps import get_session
+from app.common.deps import get_current_user_id, get_session
 from .schemas import ChatAskRequest, ChatFrontendAsk, ChatHistoryResponse, ChatMessageResponse
 from .service import ChatService
 
@@ -29,7 +29,7 @@ def get_service(session: AsyncSession = Depends(get_session)):
 @frontend_router.post("/api/v1/chat")
 async def chat(
         request: ChatFrontendAsk,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         service: ChatService = Depends(get_service),
 ):
     """前端流式问答（SSE）：
@@ -60,7 +60,7 @@ async def chat(
 @router.get("/{thread_id}/messages", response_model=ChatHistoryResponse)
 async def list_chat_messages(
         thread_id: UUID,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         service: ChatService = Depends(get_service),
 ):
     """查询会话的消息历史，按时间正序（interrupt 为待确认的方案，若有）"""
@@ -78,7 +78,7 @@ async def list_chat_messages(
 async def ask_chat_thread(
         thread_id: UUID,
         request: ChatAskRequest,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         service: ChatService = Depends(get_service),
 ):
     """内部流式问答（SSE）：

@@ -1,11 +1,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.common.deps import get_session
+from app.common.deps import get_current_user_id, get_session
 from .schemas import *
 from .service import ChatThreadService
 
@@ -19,7 +19,7 @@ def get_service(session: AsyncSession = Depends(get_session)):
 @router.post("", response_model=ChatThreadResponse)
 async def create_chat_thread(
         request: ChatThreadCreate,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         service: ChatThreadService = Depends(get_service),
 ):
     """创建会话"""
@@ -29,7 +29,7 @@ async def create_chat_thread(
 
 @router.get("", response_model=list[ChatThreadResponse])
 async def list_chat_threads(
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         service: ChatThreadService = Depends(get_service),
 ):
     """查询当前用户的会话列表，按更新时间倒序"""
@@ -41,7 +41,7 @@ async def list_chat_threads(
 async def rename_chat_thread(
         thread_id: UUID,
         request: ChatThreadUpdate,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         service: ChatThreadService = Depends(get_service),
 ):
     """重命名会话，不存在或越权时由全局异常处理器返回 404"""
@@ -52,7 +52,7 @@ async def rename_chat_thread(
 @router.delete("/{thread_id}", status_code=204)
 async def delete_chat_thread(
         thread_id: UUID,
-        user_id: Annotated[int, Header(alias="x-user-id")],
+        user_id: Annotated[int, Depends(get_current_user_id)],
         service: ChatThreadService = Depends(get_service),
 ):
     """删除会话，不存在或越权时由全局异常处理器返回 404"""

@@ -84,7 +84,7 @@ export function ApplicationPage({ session, onBack, onSessionExpired }: Applicati
           if (!ignore) setProduct(products.find((p) => String(p.id) === productId) ?? null);
         }
         if (planId) {
-          const data = (await getInsurancePlan(session.user.id, planId)) as InsurancePlan;
+          const data = (await getInsurancePlan(session.token, planId)) as InsurancePlan;
           if (!ignore) setPlan(data);
         }
       } catch {
@@ -97,7 +97,7 @@ export function ApplicationPage({ session, onBack, onSessionExpired }: Applicati
     return () => {
       ignore = true;
     };
-  }, [productId, planId, session.user.id]);
+  }, [productId, planId, session.token]);
 
   const item = useMemo(
     () => plan?.items?.find((i) => String(i.id) === itemId) ?? null,
@@ -113,7 +113,7 @@ export function ApplicationPage({ session, onBack, onSessionExpired }: Applicati
     setPaying(true);
     setError(null);
     try {
-      await markPlanItemInsured(session.user.id, planId, itemId);
+      await markPlanItemInsured(session.token, planId, itemId);
       setPaid(true);
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 401) {

@@ -21,6 +21,11 @@ class AppSettings(EnvSettings):
     port: int = Field(alias="APP_PORT", default=8001)
     debug: bool = Field(alias="APP_DEBUG", default=True, description="是否开启FastAPI的DEBUG模式")
 
+class AuthSettings(EnvSettings):
+    """JWT 认证相关设置"""
+    secret_key: str = Field(alias="JWT_SECRET_KEY")
+    expire_minutes: int = Field(alias="JWT_EXPIRE_MINUTES", default=10080)
+
 class DatabaseSettings(EnvSettings):
     """数据库相关设置"""
     host: str = Field(alias="DB_HOST", default="localhost")
@@ -69,6 +74,7 @@ class LoggingSettings(EnvSettings):
 
 class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=AppSettings)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
