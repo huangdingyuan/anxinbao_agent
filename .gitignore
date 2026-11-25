@@ -12,9 +12,12 @@ dist/
 # IDE
 .idea/
 .vscode/
+.trae/
 
 # 环境与密钥
 .env
+.env.*
+!.env.example
 *.env.local
 
 # 构建产物
