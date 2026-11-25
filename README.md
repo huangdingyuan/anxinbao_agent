@@ -5,10 +5,10 @@
 ## 功能特性
 
 - 🛒 **产品商城**：医疗险 / 重疾险 / 意外险 / 寿险分类浏览与产品卡片
-- 🤖 **AI 智能顾问**：SSE 流式问答，检索增强（产品库匹配 + 条款语义检索 + 费率表精确行算费），回答附带参考来源卡片
+- 🤖 **AI 智能顾问**：基于 LangGraph 的保险顾问 Agent（route 问题分类 → 三路并行检索 → ChatDeepSeek 流式生成），检索增强（产品库匹配 + 条款语义检索 + 费率表精确行算费），Postgres Checkpointer 保存会话状态，回答附带参考来源卡片
 - 📋 **保障方案**：多产品推荐触发方案确认（interrupt），用户确认后保存，支持更换被保人
 - 📄 **保单与理赔**：保单列表/详情/保障权益，理赔报案与状态流转
-- 📚 **知识库**：条款/费率表 PDF → MinerU 解析 → 切块入库 → bge 向量化 → Milvus 混合检索
+- 📚 **知识库（RAG）**：条款/费率表 PDF → MinerU 解析 → 切块入库 → bge 向量化 → Milvus 混合检索，并以 LangChain BaseRetriever 封装供 Agent 消费
 - 🔐 **用户体系**：用户名密码登录（bcrypt）、个人资料管理、会话历史
 
 ## 技术栈
@@ -17,9 +17,10 @@
 |---|---|
 | 前端 | React 18 · TypeScript · Vite 6 · Ant Design 5 |
 | 后端 | Python 3.14 · FastAPI · SQLAlchemy 2 (async) · structlog |
-| LLM | DeepSeek（SSE 流式） |
+| Agent 框架 | LangChain 1.x · LangGraph 1.x（StateGraph + AsyncPostgresSaver Checkpointer） |
+| LLM | DeepSeek（`langchain-deepseek` ChatDeepSeek，SSE 流式） |
 | 向量 | BAAI/bge-small-zh-v1.5（本地 CPU）· Milvus 3 |
-| 存储 | PostgreSQL 16 |
+| 存储 | PostgreSQL 16（asyncpg 业务库 + psycopg LangGraph checkpoint） |
 | 部署 | Docker Compose · Nginx |
 
 ## 目录结构
@@ -29,10 +30,11 @@
 ├── backend/                 # FastAPI 智能体服务
 │   ├── app/
 │   │   ├── main.py          # 入口（路由注册、lifespan、异常处理）
-│   │   ├── core/            # config / exceptions / logging
+│   │   ├── core/            # config / exceptions / logging / agent_runtime（LangGraph 运行时）
 │   │   ├── common/          # database / milvus / deps / utils / models
 │   │   └── modules/         # user·products·policy·claim·insurance_plan·conversation·chat·knowledge
-│   ├── scripts/             # parse_kb / sync_milvus / 测试脚本
+│   │       └── chat/        # agent.py（LangGraph 图）· rag.py（BaseRetriever 封装）· service / retrieval / router
+│   ├── scripts/             # parse_kb / sync_milvus / 测试脚本（test_chat_sse、test_rate_consult 等）
 │   ├── data/knowledge/      # 条款与费率表解析产物（JSON）
 │   └── pyproject.toml       # uv 依赖
 ├── frontend/                # React SPA（详见 frontend/README.md）
@@ -68,17 +70,21 @@ APP_PORT=8001
 DB_HOST=localhost
 DB_NAME=insurance
 DEEPSEEK_API_KEY=sk-xxxx
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+CHAT_AGENT_ENABLED=true          # false 时回退直连 LLM 旧路径
 EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
 MILVUS_URI=http://127.0.0.1:19530
 ```
 
-健康检查：`GET /health`；接口文档：`GET /docs`。
+健康检查：`GET /health`；接口文档：`GET /docs`。启动时 LangGraph 运行时自动创建 checkpoint 表（`checkpoints` 等 4 张，psycopg 连接池）。
 
 ### 3. 初始化知识库（可选，问答需要条款/费率检索时执行）
 
+解析产物 JSON 已随仓库提供（`backend/data/knowledge/`），直接入库即可：
+
 ```bash
 cd backend
-uv run python scripts/parse_kb.py parse                      # PDF → data/knowledge/*.json
+uv run python scripts/parse_kb.py parse                      # 仅当有 PDF 源文件时重新解析
 curl -X POST http://127.0.0.1:8001/api/v1/knowledge/ingest   # JSON → 切块入库（幂等）
 uv run python scripts/sync_milvus.py                         # 切块 → bge 向量 → Milvus
 ```
@@ -89,6 +95,17 @@ uv run python scripts/sync_milvus.py                         # 切块 → bge �
 cd frontend
 npm install
 npm run dev            # http://localhost:5173，/api 自动代理到后端 8001
+```
+
+## 测试
+
+后端启动后（默认 8001），在 `backend/` 目录执行（需 `PYTHONPATH=.`）：
+
+```bash
+uv run python scripts/test_chat_sse.py       # SSE 契约端到端回归（流式/引用/方案确认/越权）
+uv run python scripts/test_rate_consult.py   # 费率表精确行命中与算费回归
+uv run python scripts/test_hybrid_search.py  # 知识库混合检索回归
+uv run python scripts/test_knowledge.py      # 知识库模块 e2e
 ```
 
 ## API 概览
