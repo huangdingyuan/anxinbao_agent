@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.agent_runtime import get_advisor_graph
 from app.core.config import settings
 from app.core.exceptions import BizError, NotFoundError
 from app.core.logging import get_logger
@@ -15,6 +16,7 @@ from app.modules.conversation.models import ChatThread
 from app.modules.insurance_plan.repository import InsurancePlanRepository
 from app.modules.insurance_plan.service import InsurancePlanService, build_interrupt
 from app.modules.products.models import Product
+from .agent import HISTORY_WINDOW, SYSTEM_PROMPT
 from .models import ChatMessage
 from .repository import ChatMessageRepository
 from .retrieval import (
@@ -28,26 +30,6 @@ from .retrieval import (
 logger = get_logger(__name__)
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-
-SYSTEM_PROMPT = (
-    "你是「安心保」平台的智能保险顾问，名叫安安。"
-    "你的职责是用通俗易懂的语言解答用户的保险相关问题，包括险种科普、投保建议、理赔流程等。"
-    "回答要求：1. 条理清晰，适当分段或使用短列表；2. 不夸大产品收益，不做虚假承诺；"
-    "3. 涉及具体产品时提醒用户以条款原文为准；4. 使用中文回答。"
-    "5. 若下方提供了【产品库参考】：它是平台在售产品候选，请结合用户的年龄、预算、保障需求，"
-    "从中挑选 2-3 款最适合的产品明确推荐，并在回答中使用产品的完整名称（与参考信息中一致）逐一说明推荐理由，"
-    "不要只做泛泛的选购科普；"
-    "6. 若提供了【条款参考】：它是平台知识库中的条款原文摘录，涉及保障责任、免责、犹豫期等条款细节时以此为准作答，"
-    "并提醒用户可查阅对应条款原文；不得编造参考信息中不存在的产品或数据；"
-    "7. 若【条款参考】中包含费率表（且给出了列说明/精确行）：说明数据已命中，"
-    "必须根据列说明（保险费=每千元保额年交保费，实际保费=保险费×保额千元）"
-    "为用户算出具体保费数值并明确回答，不得回复“没有对应数据”或只做泛泛解释；"
-    "若精确行未覆盖用户指定的全部维度（如某计划/保额），要说明已覆盖的部分并指出缺哪一档；"
-    "若没有参考信息且问题涉及具体产品推荐，建议用户描述需求以便进一步推荐。"
-)
-
-# 送给模型的最近消息条数（不含本次提问）
-HISTORY_WINDOW = 10
 
 # 方案决策对应的用户消息文案（与前端乐观渲染保持一致）
 DECISION_MESSAGES = {
@@ -191,7 +173,11 @@ class ChatService:
                 continue
             if event == "references":
                 data = {
-                    "products": [_product_item(p) for p in data["products"]],
+                    # 图路径给 payload dict，legacy 路径给 ORM：统一为通用 payload 结构
+                    "products": [
+                        p if isinstance(p, dict) else _product_item(p)
+                        for p in data["products"]
+                    ],
                     "kb": data.get("kb", []),
                 }
             yield _sse(event, data)
@@ -209,10 +195,14 @@ class ChatService:
             elif event == "answer":
                 continue  # 持久化推迟到 references 处理完（可能追加来源后缀）
             elif event == "references":
-                mentioned: list[Product] = data["products"]
+                mentioned: list = data["products"]
                 # 前端 normalizeAdditionalInfo 按扁平产品数组解析
                 info_payload = [
-                    {**_product_item(p), "plan_id": None, "status": "uninsured"}
+                    {
+                        **(p if isinstance(p, dict) else _product_item(p)),
+                        "plan_id": None,
+                        "status": "uninsured",
+                    }
                     for p in mentioned
                 ]
                 # 实际推荐产品时生成方案（含单产品推荐），等待用户确认
@@ -252,15 +242,27 @@ class ChatService:
             thread_id, "".join(answer_parts), additional_info=info_payload
         )
 
-    async def _create_plan(self, thread_id: UUID, mentioned: list[Product]) -> dict | None:
-        """生成待确认方案（独立短事务），session 关闭前构建好 payload，失败时降级为不发送 interrupt"""
+    async def _create_plan(self, thread_id: UUID, mentioned: list) -> dict | None:
+        """生成待确认方案（独立短事务），session 关闭前构建好 payload，失败时降级为不发送 interrupt
+
+        mentioned 元素为 payload dict（图路径）或 ORM Product（legacy 路径），
+        统一按 id 重查 ORM 后交给方案服务。
+        """
         try:
             async with AsyncSessionFactory() as session, session.begin():
                 thread = await session.get(ChatThread, thread_id)
                 if thread is None:
                     return None
+                products: list[Product] = []
+                for item in mentioned:
+                    pid = item["id"] if isinstance(item, dict) else item.id
+                    product = await session.get(Product, pid)
+                    if product is not None:
+                        products.append(product)
+                if not products:
+                    return None
                 plan = await InsurancePlanService(session).create_from_products(
-                    thread.user_id, thread_id, mentioned
+                    thread.user_id, thread_id, products
                 )
                 # ORM 对象随 session 关闭脱管，必须在 session 内完成序列化
                 interrupt = build_interrupt(plan).model_dump(mode="json")
@@ -273,6 +275,66 @@ class ChatService:
     async def _stream(
         self, thread_id: UUID, history: list[ChatMessage], content: str
     ) -> AsyncGenerator[tuple[str, dict], None]:
+        """LangGraph Agent 图流；runtime 不可用时回退 legacy 直连路径"""
+        graph = get_advisor_graph()
+        if graph is None:
+            async for event in self._stream_legacy(thread_id, history, content):
+                yield event
+            return
+
+        # 每轮显式重置全部通道：挂 checkpointer 后未提供的通道会继承上一轮值，
+        # 残留 products/kb_refs 会造成闲聊问题误带旧推荐
+        payload_in = {
+            "question": content,
+            "history": [{"role": m.role, "content": m.content} for m in history],
+            "route": "",
+            "tasks": [],
+            "products": [],
+            "kb_refs": [],
+            "context": "",
+            "answer": "",
+            "error": None,
+        }
+        config = {"configurable": {"thread_id": str(thread_id)}, "recursion_limit": 10}
+
+        collected: list[str] = []
+        updates: dict = {}
+        try:
+            async for mode, payload in graph.astream(
+                payload_in, config, stream_mode=["messages", "updates"]
+            ):
+                if mode == "messages":
+                    chunk, meta = payload
+                    if (
+                        meta.get("langgraph_node") == "generate"
+                        and isinstance(chunk.content, str)
+                        and chunk.content
+                    ):
+                        collected.append(chunk.content)
+                        yield "delta", {"content": chunk.content}
+                else:  # "updates": {node_name: 节点返回值}
+                    updates.update(payload)
+        except Exception as exc:
+            logger.exception(f"Agent 图执行失败 thread_id={thread_id}: {exc!r}")
+            yield "answer", {"content": "".join(collected)}
+            yield "error", {"message": "回答生成失败，请稍后重试"}
+            return
+
+        answer = updates.get("generate", {}).get("answer") or "".join(collected)
+        products = updates.get("retrieve", {}).get("products", [])
+        kb_refs = updates.get("retrieve", {}).get("kb_refs", [])
+
+        # 动态推荐：只展示回答里实际提及的产品（payload dict），按首次提及位置排序
+        mentioned = filter_mentioned(products, answer)
+        yield "answer", {"content": answer}
+        if mentioned or kb_refs:
+            yield "references", {"products": mentioned, "kb": kb_refs}
+        yield "done", {}
+
+    async def _stream_legacy(
+        self, thread_id: UUID, history: list[ChatMessage], content: str
+    ) -> AsyncGenerator[tuple[str, dict], None]:
+        """回退路径：手写 AsyncOpenAI 直连（Agent runtime 不可用时保持服务可用）"""
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         for msg in history:
             messages.append({"role": msg.role, "content": msg.content})

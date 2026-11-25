@@ -92,14 +92,16 @@ def _longest_match_pos(name: str, answer: str, min_len: int = 4) -> int:
     return -1
 
 
-def filter_mentioned(products: list[Product], answer: str) -> list[Product]:
+def filter_mentioned(products: list, answer: str) -> list:
     """从候选产品中筛选出回答里实际提及的，按首次提及位置排序。
 
     匹配规则：产品名与回答的最长公共片段（>= 4 字），兼容简称与括号后缀省略。
+    products 元素支持 ORM Product 或 payload dict（LangGraph 图状态用 dict 保证可序列化）。
     """
-    matched: list[tuple[int, Product]] = []
+    matched: list[tuple[int, object]] = []
     for product in products:
-        pos = _longest_match_pos(product.name, answer)
+        name = product.name if hasattr(product, "name") else product["name"]
+        pos = _longest_match_pos(name, answer)
         if pos >= 0:
             matched.append((pos, product))
     matched.sort(key=lambda pair: pair[0])
@@ -321,7 +323,12 @@ CATEGORY_LABELS = {
 }
 
 
-def build_context_block(products: list[Product], kb_refs: list[dict] | None = None) -> str:
+def _pget(p, key: str):
+    """产品字段访问：兼容 ORM（legacy 路径）与 payload dict（LangGraph 图状态）"""
+    return p[key] if isinstance(p, dict) else getattr(p, key, None)
+
+
+def build_context_block(products: list, kb_refs: list[dict] | None = None) -> str:
     """把检索结果拼成系统提示词末尾的参考信息块"""
     lines = ["以下是可供参考的信息："]
     if kb_refs:
@@ -342,10 +349,10 @@ def build_context_block(products: list[Product], kb_refs: list[dict] | None = No
     if products:
         lines.append("【产品库参考】（平台在售产品）")
         for p in products:
-            category = CATEGORY_LABELS.get(p.category, p.category)
-            lines.append(f"- {p.name}（{category}，承保公司：{p.insurer}）")
-            if p.description:
-                lines.append(f"  产品简介：{p.description}")
-            if p.highlights:
-                lines.append(f"  产品亮点：{'；'.join(p.highlights)}")
+            category = CATEGORY_LABELS.get(_pget(p, "category"), _pget(p, "category"))
+            lines.append(f"- {_pget(p, 'name')}（{category}，承保公司：{_pget(p, 'insurer')}）")
+            if _pget(p, "description"):
+                lines.append(f"  产品简介：{_pget(p, 'description')}")
+            if _pget(p, "highlights"):
+                lines.append(f"  产品亮点：{'；'.join(_pget(p, 'highlights'))}")
     return "\n".join(lines)

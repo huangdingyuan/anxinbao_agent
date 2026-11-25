@@ -10,16 +10,27 @@ configure_logging(settings.logging.level)
 logger = get_logger(__name__)
 from contextlib import asynccontextmanager
 
-# 生命周期管理（预留）
+# 生命周期管理
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"【{settings.app.name}】应用启动中...")
     from app.common.database import check_database, close_database
+    from app.core.agent_runtime import close_agent_runtime, init_agent_runtime
     try:
         await check_database()
+    except Exception:
+        logger.exception("数据库不可用，应用无法启动")
+        raise
+    try:
+        await init_agent_runtime()
+    except Exception:
+        # Agent runtime 失败不阻断启动：图单例保持 None，问答自动回退 legacy 直连路径
+        logger.exception("Agent runtime 初始化失败，回退 legacy 直连 LLM 模式")
+    try:
         yield
     finally:
         logger.info("应用关闭中... ")
+        await close_agent_runtime()
         await close_database()
 app = FastAPI(
     title=settings.app.name,
@@ -65,9 +76,24 @@ async def health_check() -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    uvicorn.run(
+    import asyncio
+    import sys
+
+    config = uvicorn.Config(
         "app.main:app",
         host=settings.app.host,
         port=settings.app.port,
-        reload=False
+        reload=False,
     )
+    server = uvicorn.Server(config)
+    if sys.platform == "win32":
+        # psycopg 异步模式（LangGraph checkpointer）要求 Selector 事件循环，
+        # Windows 默认 Proactor 不可用；Python 3.14 起 policy 已弃用，直接 loop_factory
+        import selectors
+
+        asyncio.run(
+            server.serve(),
+            loop_factory=lambda: asyncio.SelectorEventLoop(selectors.SelectSelector()),
+        )
+    else:
+        asyncio.run(server.serve())

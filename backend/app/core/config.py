@@ -56,6 +56,11 @@ class LLMSettings(EnvSettings):
     """模型相关配置"""
     api_key: str = Field(alias="DEEPSEEK_API_KEY")
     chat_model: str = Field(alias="CHAT_MODEL", default="deepseek-v4-flash")
+    base_url: str = Field(alias="DEEPSEEK_BASE_URL", default="https://api.deepseek.com")
+
+class AgentSettings(EnvSettings):
+    """LangGraph 保险顾问 Agent 配置"""
+    enabled: bool = Field(alias="CHAT_AGENT_ENABLED", default=True)
 
 class EmbeddingSettings(EnvSettings):
     """本地向量模型配置（语义检索）"""
@@ -77,6 +82,7 @@ class Settings(BaseSettings):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
+    agent: AgentSettings = Field(default_factory=AgentSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     milvus: MilvusSettings = Field(default_factory=MilvusSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
